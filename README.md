@@ -1,8 +1,6 @@
-# IsDebuggerPresent
-
 Recently I got an itch to revisit some necessary sandbox and anti-reversing techniques. While these often are overlooked for Red Teamers, they can play a valuable part in what you code branches too in the event of a debugger or VM. After all knowing we may have been exposed may be critical to the covert operation your trying to run?
 
-I decided that comparing three excellent debugger check TTPs would be of interest and the research could probably benefit some. I know recently this area is of great importance for initial access. I would find interest in the ability to alert on IR actions and potentially beacon out with maybe a magic packet etc. Nothing necessarily new, but nice to have on you initial access implant, loader, or even persistence.
+I decided that comparing three excellent debugger check TTPs would be of interest and the research could probably benefit some. I know recently for myself this area is of great importance for initial access and the success of the operation. I find interest in the ability to alert on IR actions and potentially beacon out with maybe a magic packet or some other TTP to ID that we have burnt :(. Nothing necessarily new, but nice to have on you initial access implant, loader, or even persistence.
 
 TL;DR: https://github.com/killswitch-GUI/IsDebuggerPresent
 
@@ -31,10 +29,10 @@ int main()
 
 This, of course, is a contrived example and is very simple, it should be noted that all samples are compiled for Win32 (x86). All of the code was compiled with Visual Studio 2017 C++.
 
-After some initial analysis of the binary, it was flagged with 10/65 on Virus Total [WIN32-Recon.exe](https://www.virustotal.com/#/file/9284a09d7019210b6ba56715061578f816e7cef9e3a58cbe67b638277b2f5491/detection). For one simple API call, this isn't an idea as you can imagine. So let's take this a step further.
+After some initial analysis of the binary, it was flagged with 10/65 on Virus Total [WIN32-Recon.exe](https://www.virustotal.com/#/file/9284a09d7019210b6ba56715061578f816e7cef9e3a58cbe67b638277b2f5491/detection). For one simple API call, this isn't ideal as you can imagine. So let's take this a step further.
 
 ## NtQueryInformationProcess() Method Using PEB
-Using undocumented Windows API comes with a price in many cases, this requires specific API calls to load the proper function calls required. This can be subverted, not in this case. I think starting with the code will be ideal and working through ti step by step: https://github.com/killswitch-GUI/IsDebuggerPresent/tree/master/PEB-Recon
+Using undocumented Windows API comes with a price in many cases, this requires specific API calls to load the proper function calls required. This can be subverted if needed, in this case I opted out of that as its offten not done to hide GetProcAddress(). I think starting with the code will be ideal and working through it step by step: https://github.com/killswitch-GUI/IsDebuggerPresent/tree/master/PEB-Recon
 
 ```
 // PEB-Recon.cpp : Defines the entry point for the console application.
@@ -107,17 +105,17 @@ int main()
 }
 ```
 
-1. We use GetModuleHandle() to locate our function call of choice. IT should be noted that many people always use LoadLibary('ntdll.dll'). This isn't entirely necessary in many cases. This is almost always loaded as the Windows loader requires it and should be present in loaded modules. 
-2. We need GetProcAddress() specifically since we don't have access to compile against ntdll.dll even though "Winternl.h" is available. We need to find our NtQueryInformationProcess() function.
+1. We use GetModuleHandle() to locate our function call of choice. It should be noted that many people use LoadLibary('ntdll.dll') as they startup. This isn't entirely necessary in many cases. This is almost always loaded as the Windows loader requires it and should be present in loaded modules. 
+2. We need GetProcAddress() specifically since we don't have access to compile against ntdll.dll even though "Winternl.h" is available. This will allow us to find our NtQueryInformationProcess() function.
 3. We call GetCurrentProcess() to obtain a handle to our current process.
-4. We then call fCall() which is merely NtQueryInformationProcess. This will give us access to the PROCESS_BASIC_INFORMATION structure. This is heavily documented and rarely changes for minor releases. Particularly we now find the base address of the PEB data structure. 
+4. We then call fCall() which is merely NtQueryInformationProcess. This will give us access to the PROCESS_BASIC_INFORMATION structure. This is heavily documented and rarely changes from minor releases (Should be stable). Particularly we now find the base address of the PEB data structure (PebBaseAddress). 
 5. We now populate our PPEB structure "pPeb." The PEB structure contains a wealth of information, and in this case, it contains a FLAG of 0x0 or 0x1 to denote active debugging.
-6. Finally, we use pPeb->BeingDebugged to check if we are being debugged.
+6. Finally, we use `pPeb->BeingDebugged` to check if we are being debugged.
 
 So how did we fare with this technique? We managed a 2/65 rating against Virus Total: [PEB-Recon.exe](https://www.virustotal.com/#/file/4d33feec67851004aca39f6d4b4ff183adbd640e80c4efac4fdc0dea728fe452/detection). I think we can do better still..
 
 ## Inline Assembly Method Using TEB
-Using Inline ASM can be a headache and complicate the development process. Within offensive space it's a critical skill to have if you want to understand your actions, and capabilities. Link: https://github.com/killswitch-GUI/IsDebuggerPresent/tree/master/TEB-Recon
+Using Inline ASM can be a headache and complicate the development process. Within the offensive space understanding ASM is a critical skill to have if you want to understand your actions, capabilities and many exploits. I figured that this isnt out of the realm for Link: https://github.com/killswitch-GUI/IsDebuggerPresent/tree/master/TEB-Recon
 
 ```
 // TEB-Recon.cpp : Defines the entry point for the console application.
@@ -155,7 +153,7 @@ PPEB getPeb() {
     return (PPEB)tmp;
 }
 ```
-As you can see using "Winternl.h" we can easily link our structures needed and set up our for our PEB. Lets review whats taking place here:
+As you can see using "Winternl.h" so we can easily link our structures needed and set up our variables for the PEB. Lets review whats taking place here:
  
 1.  We define getPeb() as a PBEB structure.
 2.  Using __asm, we can call on specific registers. It is often known that the Thread Execution Block (TEB) on x86 is stored in the FS register, we can use this to reference the PEB address: `FS:[0x30] Linear address of Process Environment Block (PEB)`
